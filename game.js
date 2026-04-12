@@ -9,10 +9,11 @@ const G_NAME = { rock: '石头', scissors: '剪刀', paper: '布' };
 const G_ICON = { rock: '✊', scissors: '✌️', paper: '🖐️' };
 const G_COLOR = { rock: '#e67e22', scissors: '#e74c3c', paper: '#3498db' };
 const COUNTER = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
-const SELF_DMG = 4;
+const SELF_DMG = 6;
 const MAX_CARDS = 3;
 const HAND_SIZE = 5;
 const MAX_ROUNDS = 15;
+const MAX_LOCKS = 2;
 
 const SYS_NAME = {
   commercial: '商业', empathy: '共情', logic: '逻辑', neutral: '中立'
@@ -38,7 +39,7 @@ const CARD_LIB = {
   n_ganji_pas: { name:'干劲·热', system:'neutral', gestures:[SCISSORS,ROCK],
     desc:'2伤害,+2热情', cDesc:'造成6伤害', fx:{dmg:2,passion:2}, cfx:{dmg:6} },
   n_shouze:    { name:'守则', system:'neutral', gestures:[PAPER,SCISSORS],
-    desc:'2伤害,+2破绽', cDesc:'造成6伤害', fx:{dmg:2,weakness:2}, cfx:{dmg:6} },
+    desc:'2伤害,+2弱点', cDesc:'造成6伤害', fx:{dmg:2,weakness:2}, cfx:{dmg:6} },
   n_genghuan:  { name:'更换', system:'neutral', gestures:[ROCK,PAPER],
     desc:'4伤害,换1牌', cDesc:'造成4伤害', fx:{dmg:4,swap:1}, cfx:{dmg:4} },
   n_xushi:     { name:'蓄势', system:'neutral', gestures:[SCISSORS,ROCK],
@@ -49,54 +50,129 @@ const CARD_LIB = {
     desc:'4点伤害+封住1手势', cDesc:'4点伤害+封住1手势', fx:{dmg:4,lock:1}, cfx:{dmg:4} },
   c_huanhe:    { name:'缓和', system:'commercial', gestures:[PAPER,ROCK],
     desc:'回复6+封住1手势', cDesc:'回复4+封住1手势', fx:{heal:6,lock:1}, cfx:{heal:4} },
-  c_duichong:  { name:'应对', system:'commercial', gestures:[SCISSORS,PAPER],
-    desc:'3点伤害+受伤减半', cDesc:'3点伤害+减伤+封住1手势', fx:{dmg:3,reduce:0.5}, cfx:{dmg:3,reduce:0.5,lock:1} },
-  c_zhuanli:   { name:'占位', system:'commercial', gestures:[ROCK,PAPER],
-    desc:'3点伤害+封住1手势', cDesc:'3点伤害+封住2手势', fx:{dmg:3,lock:1}, cfx:{dmg:3,lock:2} },
+  c_duichong: {
+  name:'应对', system:'commercial', gestures:[SCISSORS,PAPER],
+  desc:'3点伤害+受伤减半',
+  cDesc:'封住1手势',
+  fx:{dmg:3,reduce:0.5},
+  cfx:{lock:1}
+},
+  c_zhuanli: {
+  name:'占位', system:'commercial', gestures:[ROCK,PAPER],
+  desc:'3点伤害+封住1手势',
+  cDesc:'再封住1手势',
+  fx:{dmg:3,lock:1},
+  cfx:{lock:1}
+},
   c_tuixiao:   { name:'乘胜', system:'commercial', gestures:[SCISSORS,ROCK],
     desc:'4点伤害,每封住+2', cDesc:'效果触发两次', fx:{dmg:4,special:'tuixiao'}, cfx:{special:'tuixiao_re'} },
   c_qingsuan:  { name:'终局', system:'commercial', gestures:[PAPER,SCISSORS],
     desc:'解封全部+每封住6伤', cDesc:'回复12生命', fx:{special:'qingsuan'}, cfx:{special:'qingsuan_c'} },
-  c_zhihuan:   { name:'重组', system:'commercial', gestures:[ROCK,PAPER],
-    desc:'6点伤害+换1张牌', cDesc:'6点伤害+换2张牌', fx:{dmg:6,swap:1}, cfx:{dmg:6,swap:2} },
-  c_daijia:    { name:'押注', system:'commercial', gestures:[SCISSORS,ROCK],
-    desc:'自伤2+封住2手势', cDesc:'封住效果延续到下回合', fx:{selfDmg:2,lock:2}, cfx:{selfDmg:2,lock:2,special:'persist'} },
+ c_zhihuan: {
+  name:'重组', system:'commercial', gestures:[ROCK,PAPER],
+  desc:'6点伤害+换1张牌',
+  cDesc:'再更换1张牌',
+  fx:{dmg:6,swap:1},
+  cfx:{swap:1}
+},
+  c_daijia: {
+  name:'押注', system:'commercial', gestures:[SCISSORS,ROCK],
+  desc:'自伤2+封住2手势',
+  cDesc:'封住效果延续到下回合',
+  fx:{selfDmg:2,lock:2},
+  cfx:{special:'persist'}
+},
 
   // === EMPATHY ===
-  e_reqing:    { name:'共鸣', system:'empathy', gestures:[ROCK,SCISSORS],
-    desc:'3点伤害+积累2热情', cDesc:'4点伤害+积累2热情', fx:{dmg:3,passion:2}, cfx:{dmg:4,passion:2} },
-  e_fusu:      { name:'治愈', system:'empathy', gestures:[PAPER,ROCK],
-    desc:'回复5+积累2热情', cDesc:'回复2+积累2热情', fx:{heal:5,passion:2}, cfx:{heal:2,passion:2} },
-  e_kunjing:   { name:'低谷', system:'empathy', gestures:[SCISSORS,PAPER],
-    desc:'2点伤害+受伤减半', cDesc:'受伤减半+积累4热情', fx:{dmg:2,reduce:0.5}, cfx:{reduce:0.5,passion:4} },
-  e_yayi:      { name:'积压', system:'empathy', gestures:[ROCK,PAPER],
-    desc:'自伤3+积累5热情', cDesc:'自伤3+4点伤害+积累5热情', fx:{selfDmg:3,passion:5}, cfx:{selfDmg:3,dmg:4,passion:5} },
-  e_tupo:      { name:'爆发', system:'empathy', gestures:[SCISSORS,ROCK],
-    desc:'5点伤害;热情≥3消耗3额外+8', cDesc:'+1热情', fx:{dmg:5,special:'tupo'}, cfx:{passion:1} },
+ e_reqing: {
+  name:'共鸣', system:'empathy', gestures:[ROCK,SCISSORS],
+  desc:'3点伤害+积累2热情',
+  cDesc:'造成4点伤害',
+  fx:{dmg:3,passion:2},
+  cfx:{dmg:4}
+},
+e_fusu: {
+  name:'治愈', system:'empathy', gestures:[PAPER,ROCK],
+  desc:'回复5+积累2热情',
+  cDesc:'回复2',
+  fx:{heal:5,passion:2},
+  cfx:{heal:2}
+},
+  e_kunjing: {
+  name:'低谷', system:'empathy', gestures:[SCISSORS,PAPER],
+  desc:'2点伤害+受伤减半',
+  cDesc:'积累4热情',
+  fx:{dmg:2,reduce:0.5},
+  cfx:{passion:4}
+},
+ e_yayi: {
+  name:'积压', system:'empathy', gestures:[ROCK,PAPER],
+  desc:'自伤3+积累5热情',
+  cDesc:'造成4点伤害',
+  fx:{selfDmg:3,passion:5},
+  cfx:{dmg:4}
+},
+e_tupo: {
+  name:'爆发', system:'empathy', gestures:[SCISSORS,ROCK],
+  desc:'5点伤害;热情≥3消耗3额外+8',
+  cDesc:'+1热情',
+  fx:{dmg:5,special:'tupo'},
+  cfx:{passion:1}
+},
   e_linian:    { name:'倾注', system:'empathy', gestures:[PAPER,SCISSORS],
     desc:'6伤害+清空全部热情×3', cDesc:'回复伤害的50%', fx:{dmg:6,special:'linian'}, cfx:{special:'linian_c'} },
-  e_zhuanhuan: { name:'转机', system:'empathy', gestures:[ROCK,PAPER],
-    desc:'4点伤害+换1张牌', cDesc:'4点伤害+换2张牌', fx:{dmg:4,swap:1}, cfx:{dmg:4,swap:2} },
-  e_guozai:    { name:'透支', system:'empathy', gestures:[SCISSORS,ROCK],
-    desc:'自伤2+下回合积累8热情', cDesc:'自伤2+回复6', fx:{selfDmg:2,special:'guozai'}, cfx:{selfDmg:2,heal:6} },
+  e_zhuanhuan: {
+  name:'转机', system:'empathy', gestures:[ROCK,PAPER],
+  desc:'4点伤害+换1张牌',
+  cDesc:'再更换1张牌',
+  fx:{dmg:4,swap:1},
+  cfx:{swap:1}
+},
+ e_guozai: {
+  name:'透支', system:'empathy', gestures:[SCISSORS,ROCK],
+  desc:'自伤2+下回合积累8热情',
+  cDesc:'回复4生命',
+  fx:{selfDmg:2,special:'guozai'},
+  cfx:{heal:4}
+},
 
   // === LOGIC ===
   l_guancha:   { name:'洞察', system:'logic', gestures:[ROCK,SCISSORS],
     desc:'2点伤害+给BOSS积2弱点', cDesc:'3点伤害', fx:{dmg:2,weakness:2}, cfx:{dmg:3} },
   l_jiesuan:   { name:'核算', system:'logic', gestures:[PAPER,ROCK],
     desc:'回复4+给BOSS积2弱点', cDesc:'回复2', fx:{heal:4,weakness:2}, cfx:{heal:2} },
-  l_baogao:    { name:'分析', system:'logic', gestures:[SCISSORS,PAPER],
-    desc:'3点伤害+受伤减半', cDesc:'3点伤害+减伤+给BOSS积2弱点', fx:{dmg:3,reduce:0.5}, cfx:{dmg:3,reduce:0.5,weakness:2} },
-  l_shencha:   { name:'叠加', system:'logic', gestures:[ROCK,PAPER],
-    desc:'给BOSS积3弱点', cDesc:'给BOSS积6弱点', fx:{weakness:3}, cfx:{weakness:6} },
+  l_baogao: {
+  name:'分析', system:'logic', gestures:[SCISSORS,PAPER],
+  desc:'3点伤害+受伤减半',
+  cDesc:'给BOSS积2弱点',
+  fx:{dmg:3,reduce:0.5},
+  cfx:{weakness:2}
+},
+  l_shencha: {
+  name:'叠加', system:'logic', gestures:[ROCK,PAPER],
+  desc:'给BOSS积3弱点',
+  cDesc:'再给予3层弱点',
+  fx:{weakness:3},
+  cfx:{weakness:3}
+},
   l_tuidiao:   { name:'推演', system:'logic', gestures:[SCISSORS,ROCK],
     desc:'3点伤害+弱点层数伤害', cDesc:'效果触发两次', fx:{dmg:3,special:'tuidiao'}, cfx:{special:'tuidiao_c'} },
   l_hegui:     { name:'清零', system:'logic', gestures:[PAPER,SCISSORS],
     desc:'消耗全部弱点,层数×2伤', cDesc:'下回合弱点不衰减', fx:{special:'hegui'}, cfx:{special:'hegui_c'} },
-  l_zhihuan:   { name:'重配', system:'logic', gestures:[ROCK,PAPER],
-    desc:'5点伤害+换1张牌', cDesc:'5点伤害+换2张牌', fx:{dmg:5,swap:1}, cfx:{dmg:5,swap:2} },
-  l_fushen:    { name:'蓄势', system:'logic', gestures:[SCISSORS,ROCK],
-    desc:'自伤4+下回合给BOSS积3弱点', cDesc:'自伤4+回复8', fx:{selfDmg:4,special:'fushen'}, cfx:{selfDmg:4,heal:8} },
+  l_zhihuan: {
+  name:'重配', system:'logic', gestures:[ROCK,PAPER],
+  desc:'5点伤害+换1张牌',
+  cDesc:'再更换1张牌',
+  fx:{dmg:5,swap:1},
+  cfx:{swap:1}
+},
+  l_fushen: {
+  name:'蓄势', system:'logic', gestures:[SCISSORS,ROCK],
+  desc:'自伤4+下回合给BOSS积3弱点',
+  cDesc:'回复4点生命',
+  fx:{selfDmg:4,special:'fushen'},
+  cfx:{heal:4}
+}
 };
 
 // --- DECK CONFIGS (12 cards, each with ONE fixed gesture assigned at deck-build time) ---
@@ -144,8 +220,8 @@ const BOSSES = {
   logic: {
     name: '逻辑裁定者',
     hp: 80,
-    mods: ['胜利破绽4','回合结束破绽1','免疫2点以下'],
-    desc: 'BOSS猜拳赢给你4破绽 | 回合末+1破绽 | 免疫≤2伤害'
+    mods: ['胜利弱点4','回合结束弱点1','免疫2点以下'],
+    desc: 'BOSS猜拳赢给你4弱点 | 回合末+1弱点 | 免疫≤2伤害'
   },
 };
 
@@ -166,7 +242,7 @@ class BattleEngine {
       // 共情词条
       '胜利热情3', '平局热情2', '被克热情2',
       // 逻辑词条
-      '胜利破绽4', '回合结束破绽1',
+      '胜利弱点4', '回合结束弱点1',
       // 商业词条（商业体系时加入）
       ...(systemKey === 'commercial' ? ['随机封锁', '封锁伤害加成', '解锁反击4'] : []),
       // 克制词条（设计文档里的平衡词条）
@@ -263,7 +339,7 @@ class BattleEngine {
     }
     if (this.s.nextRoundWeakness > 0) {
       this.s.bossWeakness += this.s.nextRoundWeakness;
-      this.addLog(`延迟效果: BOSS+${this.s.nextRoundWeakness}破绽`);
+      this.addLog(`延迟效果: BOSS+${this.s.nextRoundWeakness}弱点`);
       this.s.nextRoundWeakness = 0;
     }
 
@@ -283,11 +359,18 @@ class BattleEngine {
     this.s.persistLocks = false;
 
     // Boss mod: 随机封锁 (lock one of player's gestures at round start)
-    if (this.s.bossMods.includes('随机封锁') && this.s.bossPassiveActive) {
-      const g = GESTURES[Math.floor(Math.random() * 3)];
+   if (this.s.bossMods.includes('随机封锁') && this.s.bossPassiveActive) {
+  if (this.s.playerLocks.size < MAX_LOCKS) {
+    const unlocked = GESTURES.filter(g => !this.s.playerLocks.has(g));
+    if (unlocked.length > 0) {
+      const g = unlocked[Math.floor(Math.random() * unlocked.length)];
       this.s.playerLocks.add(g);
-      this.addLog(`BOSS词条: 随机封锁你的 ${G_NAME[g]}${G_ICON[g]}`);
+      this.addLog(`BOSS随机封锁: ${G_NAME[g]}${G_ICON[g]}`);
     }
+  } else {
+    this.addLog(`BOSS随机封锁失败: 已达${MAX_LOCKS}锁上限`);
+  }
+}
 
     this.drawHand();
     this.currentBossGesture = this.rollBossGesture();
@@ -378,195 +461,191 @@ class BattleEngine {
     result.events.push(`${G_ICON[chosenGesture]}${G_NAME[chosenGesture]} vs ${G_ICON[bossG]}${G_NAME[bossG]} → ${rpsText}`);
 
     // 6. Apply card effects
-    const fx = isCounter ? (card.cfx || {}) : (card.fx || {});
+    const baseFx = card.fx || {};
+    const counterFx = isCounter ? (card.cfx || {}) : {};
 
-    // Base damage
-    let dmg = fx.dmg || 0;
-    if (dmg > 0 && totalPassion > 0) {
-      const orig = dmg;
-      dmg += totalPassion;
-      result.events.push(`热情加成: ${orig}+${totalPassion}=${dmg}`);
-    }
+    let dmg = 0;
+    let heal = 0;
 
-    // Healing
-    let heal = fx.heal || 0;
+    const applyEffect = (fx, label = '') => {
+      if (!fx) return;
 
-    // Self damage from card
-    if (fx.selfDmg) {
-      this.s.playerHp -= fx.selfDmg;
-      result.selfDamageTaken += fx.selfDmg;
-      result.events.push(`卡牌自伤${fx.selfDmg}`);
-    }
+      const prefix = label ? `${label}` : '';
 
-    // Damage reduction
-    if (fx.reduce) {
-      this.s.damageReduce = Math.max(this.s.damageReduce, fx.reduce);
-      result.events.push(`本回合受伤减少${Math.round(fx.reduce*100)}%`);
-    }
+      // Base damage
+      if (fx.dmg) {
+        let addDmg = fx.dmg;
+        if (addDmg > 0 && totalPassion > 0) {
+          const orig = addDmg;
+          addDmg += totalPassion;
+          result.events.push(`${prefix}热情加成: ${orig}+${totalPassion}=${addDmg}`);
+        }
+        dmg += addDmg;
+      }
 
-    // Passion gain
-    if (fx.passion) {
-      this.s.passion += fx.passion;
-      result.events.push(`+${fx.passion}热情(→${this.s.passion})`);
-    }
+      // Healing
+      if (fx.heal) {
+        heal += fx.heal;
+      }
 
-    // Weakness give (to boss)
-    if (fx.weakness) {
-      this.s.bossWeakness += fx.weakness;
-      result.events.push(`BOSS积${fx.weakness}弱点(→${this.s.bossWeakness})`);
-    }
+      // Self damage from card
+      if (fx.selfDmg) {
+        this.s.playerHp -= fx.selfDmg;
+        result.selfDamageTaken += fx.selfDmg;
+        result.events.push(`${prefix}卡牌自伤${fx.selfDmg}`);
+      }
 
-    // Lock (on boss) - N random attempts, each 1/3 chance of any gesture
-    if (fx.lock) {
-      for (let i = 0; i < fx.lock; i++) {
-        const g = GESTURES[Math.floor(Math.random() * 3)];
-        if (!this.s.bossLocks.has(g)) {
+      // Damage reduction
+      if (fx.reduce) {
+        this.s.damageReduce = Math.max(this.s.damageReduce, fx.reduce);
+        result.events.push(`${prefix}本回合受伤减少${Math.round(fx.reduce * 100)}%`);
+      }
+
+      // Passion gain
+      if (fx.passion) {
+        this.s.passion += fx.passion;
+        result.events.push(`${prefix}+${fx.passion}热情(→${this.s.passion})`);
+      }
+
+      // Weakness give (to boss)
+      if (fx.weakness) {
+        this.s.bossWeakness += fx.weakness;
+        result.events.push(`${prefix}BOSS积${fx.weakness}弱点(→${this.s.bossWeakness})`);
+      }
+
+      // Lock (on boss)
+      if (fx.lock) {
+        for (let i = 0; i < fx.lock; i++) {
+          if (this.s.bossLocks.size >= MAX_LOCKS) {
+            result.events.push(`${prefix}锁定失败: BOSS已达${MAX_LOCKS}锁上限`);
+            break;
+          }
+          const unlocked = GESTURES.filter(g => !this.s.bossLocks.has(g));
+          if (unlocked.length <= 0) break;
+          const g = unlocked[Math.floor(Math.random() * unlocked.length)];
           this.s.bossLocks.add(g);
-          result.events.push(`锁住BOSS ${G_NAME[g]}${G_ICON[g]}`);
-        } else {
-          result.events.push(`锁定落空(${G_NAME[g]}已锁)`);
+          result.events.push(`${prefix}BOSS锁定 ${G_NAME[g]}${G_ICON[g]}`);
         }
       }
-    }
 
-    // Swap: store pending count, player chooses which card to replace
-    if (fx.swap) {
-      const availRemain = this.deck.filter(c => !this.hand.includes(c));
-      const swapCount = Math.min(fx.swap, availRemain.length, this.hand.filter(c => c.id !== card.id).length);
-      if (swapCount > 0) {
-        this.pendingSwaps = swapCount;
-        result.events.push(`\u{1f501} \u9009\u62e9${swapCount}\u5f20\u724c\u66ff\u6362`);
-      }
-    }
-
-    // --- SPECIAL EFFECTS ---
-    if (fx.special) {
-      switch(fx.special) {
-        case 'tuixiao': {
-          // 推销: each lock on boss +2 damage
-          const lockBonus = this.s.bossLocks.size * 2;
-          dmg += lockBonus;
-          if (lockBonus > 0) result.events.push(`推销锁定加成+${lockBonus}`);
-          break;
-        }
-        case 'tuixiao_re': {
-          // 推销 counter: retrigger (double the base effect)
-          const lockBonus2 = this.s.bossLocks.size * 2;
-          const extraDmg = (fx.dmg || 4) + totalPassion + lockBonus2;
-          dmg = extraDmg * 2;
-          result.events.push(`推销克制再触发! 总伤${dmg}`);
-          break;
-        }
-        case 'qingsuan': {
-          // 清算: release all locks, deal 18 if had locks
-          if (this.s.bossLocks.size > 0) {
-            dmg = 18;
-            result.events.push(`清算! 解除${this.s.bossLocks.size}锁,造成18伤害`);
-            this.s.bossLocks.clear();
-          } else {
-            dmg = 0;
-            result.events.push('清算: 无锁定,无效果');
-          }
-          break;
-        }
-        case 'qingsuan_c': {
-          // 清算 counter: heal 12
-          heal = 12;
-          if (this.s.bossLocks.size > 0) {
-            dmg = 18;
-            this.s.bossLocks.clear();
-            result.events.push(`清算克制! 18伤害+回复12`);
-          } else {
-            result.events.push('清算克制: 回复12');
-          }
-          break;
-        }
-        case 'persist': {
-          this.s.persistLocks = true;
-          result.events.push('锁定持续到下回合');
-          break;
-        }
-        case 'tupo': {
-          // 突破: if passion >= 3 (pre-decay), consume 3, +8 damage
-          if (totalPassion >= 3) {
-            this.s.passion = Math.max(0, this.s.passion - 3);
-            dmg += 8;
-            result.events.push(`突破! 消耗3热情,+8伤害(→${this.s.passion}热情)`);
-          } else {
-            result.events.push(`突破: 热情不足(${totalPassion}<3)`);
-          }
-          break;
-        }
-        case 'linian': {
-          // 理念: clear passion (pre-decay value), deal passion*3
-          const bonus = totalPassion * 3;
-          dmg += bonus;
-          result.events.push(`理念! ${totalPassion}热情×3=${bonus}伤害`);
-          this.s.passion = 0;
-          break;
-        }
-        case 'linian_c': {
-          // 理念 counter: 6 base + passion*3 + heal 50%
-          dmg = 6;
-          const bonus2 = totalPassion * 3;
-          dmg += bonus2;
-          heal = Math.floor(dmg / 2);
-          result.events.push(`理念克制! ${dmg}伤害,回复${heal}`);
-          this.s.passion = 0;
-          break;
-        }
-        case 'guozai': {
-          // 过载: next round +8 passion
-          this.s.nextRoundPassion += 8;
-          result.events.push('过载: 下回合+8热情');
-          break;
-        }
-        case 'tuidiao': {
-          // 推敲: +weakness layers damage
-          const wBonus = this.s.bossWeakness;
-          dmg += wBonus;
-          result.events.push(`推敲: +${wBonus}弱点伤害`);
-          break;
-        }
-        case 'tuidiao_c': {
-          // 推敲 counter: retrigger
-          const wBonus2 = this.s.bossWeakness;
-          const singleHit = 3 + wBonus2 + totalPassion;
-          dmg = singleHit * 2;
-          result.events.push(`推敲克制再触发! ${singleHit}×2=${dmg}`);
-          break;
-        }
-        case 'hegui': {
-          // 合规: consume all weakness, layers*2 damage
-          dmg = this.s.bossWeakness * 2;
-          result.events.push(`合规! ${this.s.bossWeakness}层×2=${dmg}伤害`);
-          this.s.bossWeakness = 0;
-          break;
-        }
-        case 'hegui_c': {
-          // 合规 counter: + no decay next round
-          dmg = this.s.bossWeakness * 2;
-          this.s.noWeaknessDecay = true;
-          result.events.push(`合规克制! ${this.s.bossWeakness}层×2=${dmg},下回合不衰减`);
-          this.s.bossWeakness = 0;
-          break;
-        }
-        case 'baogao_c': {
-          // 报告 counter: on being attacked, give 2 weakness
-          this.s.bossWeakness += 2;
-          result.events.push(`报告克制: BOSS+2弱点(→${this.s.bossWeakness})`);
-          break;
-        }
-        case 'fushen': {
-          // 复审: next round +3 weakness on boss
-          this.s.nextRoundWeakness += 3;
-          result.events.push('复审: 下回合BOSS+3破绽');
-          break;
+      // Swap
+      if (fx.swap) {
+        const availRemain = this.deck.filter(c => !this.hand.includes(c));
+        const swapCount = Math.min(
+          fx.swap,
+          availRemain.length,
+          this.hand.filter(c => c.id !== card.id).length
+        );
+        if (swapCount > 0) {
+          this.pendingSwaps = Math.max(this.pendingSwaps, swapCount);
+          result.events.push(`${prefix}🔁 选择${swapCount}张牌替换`);
         }
       }
-    }
 
-    // Apply boss immune to <=2
+      // --- SPECIAL EFFECTS ---
+      if (fx.special) {
+        switch (fx.special) {
+          case 'tuixiao': {
+            const lockBonus = this.s.bossLocks.size * 2;
+            dmg += lockBonus;
+            if (lockBonus > 0) result.events.push(`${prefix}推销锁定加成+${lockBonus}`);
+            break;
+          }
+          case 'tuixiao_re': {
+            const lockBonus2 = this.s.bossLocks.size * 2;
+            const singleHit = 4 + totalPassion + lockBonus2;
+            dmg += singleHit;
+            result.events.push(`${prefix}推销克制再触发! 追加${singleHit}伤害`);
+            break;
+          }
+          case 'qingsuan': {
+            if (this.s.bossLocks.size > 0) {
+              const lockCount = this.s.bossLocks.size;
+              dmg += 18;
+              result.events.push(`${prefix}清算! 解除${lockCount}锁,造成18伤害`);
+              this.s.bossLocks.clear();
+            } else {
+              result.events.push(`${prefix}清算: 无锁定,无效果`);
+            }
+            break;
+          }
+          case 'qingsuan_c': {
+            heal += 12;
+            result.events.push(`${prefix}清算克制: 回复12`);
+            break;
+          }
+          case 'persist': {
+            this.s.persistLocks = true;
+            result.events.push(`${prefix}锁定持续到下回合`);
+            break;
+          }
+          case 'tupo': {
+            if (totalPassion >= 3) {
+              this.s.passion = Math.max(0, this.s.passion - 3);
+              dmg += 8;
+              result.events.push(`${prefix}突破! 消耗3热情,+8伤害(→${this.s.passion}热情)`);
+            } else {
+              result.events.push(`${prefix}突破: 热情不足(${totalPassion}<3)`);
+            }
+            break;
+          }
+          case 'linian': {
+            const bonus = totalPassion * 3;
+            dmg += bonus;
+            result.events.push(`${prefix}理念! ${totalPassion}热情×3=${bonus}伤害`);
+            this.s.passion = 0;
+            break;
+          }
+          case 'linian_c': {
+            const currentTotal = dmg;
+            const extraHeal = Math.floor(currentTotal / 2);
+            heal += extraHeal;
+            result.events.push(`${prefix}理念克制! 回复${extraHeal}`);
+            break;
+          }
+          case 'guozai': {
+            this.s.nextRoundPassion += 8;
+            result.events.push(`${prefix}过载: 下回合+8热情`);
+            break;
+          }
+          case 'tuidiao': {
+            const wBonus = this.s.bossWeakness;
+            dmg += wBonus;
+            result.events.push(`${prefix}推敲: +${wBonus}弱点伤害`);
+            break;
+          }
+          case 'tuidiao_c': {
+            const singleHit = 3 + totalPassion + this.s.bossWeakness;
+            dmg += singleHit;
+            result.events.push(`${prefix}推敲克制再触发! 追加${singleHit}伤害`);
+            break;
+          }
+          case 'hegui': {
+            const consumed = this.s.bossWeakness;
+            const extra = consumed * 2;
+            dmg += extra;
+            result.events.push(`${prefix}合规! ${consumed}层×2=${extra}伤害`);
+            this.s.bossWeakness = 0;
+            break;
+          }
+          case 'hegui_c': {
+            this.s.noWeaknessDecay = true;
+            result.events.push(`${prefix}合规克制! 下回合弱点不衰减`);
+            break;
+          }
+          case 'fushen': {
+            this.s.nextRoundWeakness += 3;
+            result.events.push(`${prefix}复审: 下回合BOSS+3弱点`);
+            break;
+          }
+        }
+      }
+    };
+
+    applyEffect(baseFx, '');
+    if (isCounter) {
+      applyEffect(counterFx, '克制追加: ');
+    }
     if (this.s.bossMods.includes('免疫2点以下') && dmg > 0 && dmg <= 2 && this.s.bossPassiveActive) {
       result.events.push(`${dmg}伤害→BOSS免疫(≤2)`);
       dmg = 0;
@@ -692,28 +771,44 @@ class BattleEngine {
           }
           break;
         case '解锁反击4':
-          // 克商业：与被封锁手势战斗→解锁+4伤
-          if (this.s.bossLocks.has(bossG)) {
-            this.s.bossLocks.delete(bossG);
-            this.s.playerHp -= 4;
-            result.events.push(`BOSS词条: 封锁反击! 解除${G_NAME[bossG]}+4伤`);
-          }
-          break;
-        case '胜利封锁':
-          if (isLose) { // boss wins
-            const g = GESTURES[Math.floor(Math.random() * 3)];
-            this.s.playerLocks.add(g);
-            result.events.push(`BOSS词条: 胜利封锁 ${G_NAME[g]}`);
-          }
-          break;
-        case '第一张封锁':
-          if (cardIndex === 0) {
-            const g = GESTURES[Math.floor(Math.random() * 3)];
-            this.s.playerLocks.add(g);
-            result.events.push(`BOSS词条: 第一张封锁 ${G_NAME[g]}`);
-          }
-          break;
-        case '胜利破绽4':
+  // 克商业：与被封锁手势战斗→解锁+4伤
+  if (this.s.bossLocks.has(bossG)) {
+    this.s.bossLocks.delete(bossG);
+    this.s.playerHp -= 4;
+    result.events.push(`BOSS词条: 封锁反击! 解除${G_NAME[bossG]}+4伤`);
+  }
+  break;
+
+case '胜利封锁':
+  if (isLose) {
+    if (this.s.playerLocks.size < MAX_LOCKS) {
+      const unlocked = GESTURES.filter(g => !this.s.playerLocks.has(g));
+      if (unlocked.length > 0) {
+        const g = unlocked[Math.floor(Math.random() * unlocked.length)];
+        this.s.playerLocks.add(g);
+        result.events.push(`BOSS词条: 胜利封锁 ${G_NAME[g]}`);
+      }
+    } else {
+      result.events.push(`BOSS词条: 胜利封锁失败(已达${MAX_LOCKS}锁上限)`);
+    }
+  }
+  break;
+
+case '第一张封锁':
+  if (cardIndex === 0) {
+    if (this.s.playerLocks.size < MAX_LOCKS) {
+      const unlocked = GESTURES.filter(g => !this.s.playerLocks.has(g));
+      if (unlocked.length > 0) {
+        const g = unlocked[Math.floor(Math.random() * unlocked.length)];
+        this.s.playerLocks.add(g);
+        result.events.push(`BOSS词条: 第一张封锁 ${G_NAME[g]}`);
+      }
+    } else {
+      result.events.push(`BOSS词条: 第一张封锁失败(已达${MAX_LOCKS}锁上限)`);
+    }
+  }
+  break;
+        case '胜利弱点4':
           if (isLose) {
             this.s.playerWeakness += 4 + this.modBonus;
             result.events.push(`BOSS词条: 猜拳赢+4弱点(你:${this.s.playerWeakness}层)`);
@@ -757,16 +852,16 @@ class BattleEngine {
           }
           break;
         }
-        case '平负破绽2':
+        case '平负弱点2':
           if (!isLose) {
             this.s.playerWeakness += 2;
             result.events.push(`BOSS词条: 平/负+2弱点(你:${this.s.playerWeakness}层)`);
           }
           break;
-        case '第三张破绽5':
+        case '第三张弱点5':
           if (cardIndex === 2) {
             this.s.playerWeakness += 5;
-            result.events.push(`BOSS词条: 第三张+5破绽(你:${this.s.playerWeakness}层)`);
+            result.events.push(`BOSS词条: 第三张+5弱点(你:${this.s.playerWeakness}层)`);
           }
           break;
       }
@@ -789,16 +884,16 @@ class BattleEngine {
       for (const mod of this.s.bossMods) {
         switch(mod) {
           case '回合结束伤害2':
-            this.s.playerHp -= 2 - this.modBonus;
+            this.s.playerHp -= 2 + this.modBonus;
             result.events.push(`BOSS词条: 回合末+${2+this.modBonus}伤害`);
             break;
           case '回合结束回复3':
             this.s.bossHp = Math.min(this.s.bossMaxHp, this.s.bossHp + 3 + this.modBonus);
             result.events.push(`BOSS词条: 回合末回复3(→${this.s.bossHp})`);
             break;
-          case '回合结束破绽1':
+          case '回合结束弱点1':
             this.s.playerWeakness += 1 + this.modBonus;
-            result.events.push(`BOSS词条: 回合末+1破绽(你:${this.s.playerWeakness}层)`);
+            result.events.push(`BOSS词条: 回合末+1弱点(你:${this.s.playerWeakness}层)`);
             break;
         }
       }
@@ -814,7 +909,7 @@ class BattleEngine {
     // Weakness decay (boss weakness, 50% end of round)
     if (this.s.bossWeakness > 0) {
       if (this.s.noWeaknessDecay) {
-        result.events.push(`BOSS破绽${this.s.bossWeakness}层(本回合不衰减)`);
+        result.events.push(`BOSS弱点${this.s.bossWeakness}层(本回合不衰减)`);
         this.s.noWeaknessDecay = false;
       } else {
         const before = this.s.bossWeakness;
@@ -968,10 +1063,10 @@ class GameUI {
                 <li>倾注：清空全部热情，热情×3爆发</li>
                 <li>爆发：热情≥3时消耗3，额外+8伤害</li>
               </ul>
-              <b style="color:#4db8ff">💢 逻辑体系 · 破绽</b>
+              <b style="color:#4db8ff">💢 逻辑体系 · 弱点</b>
               <ul>
-                <li>给BOSS堆破绽层数</li>
-                <li>每出1张牌，BOSS受到破绽层数的伤害</li>
+                <li>给BOSS堆弱点层数</li>
+                <li>每出1张牌，BOSS受到弱点层数的伤害</li>
                 <li>回合末弱点衰减50%</li>
                 <li>推演：额外造成弱点层伤害</li>
                 <li>清零：消耗全部弱点，层数×2伤害</li>
@@ -1129,7 +1224,7 @@ class GameUI {
             if (l.startsWith('===')) cls = 'log-round';
             else if (l.includes('BOSS攻击') || l.includes('反噬') || l.includes('自伤') || l.includes('伤害→')) cls = 'log-dmg';
             else if (l.includes('回复') || l.includes('造成') && l.includes('BOSS')) cls = 'log-heal';
-            else if (l.includes('热情') || l.includes('破绽') || l.includes('锁定') || l.includes('🔁')) cls = 'log-res';
+            else if (l.includes('热情') || l.includes('弱点') || l.includes('锁定') || l.includes('🔁')) cls = 'log-res';
             return '<div class="log-line ' + cls + '">' + l + '</div>';
           }).join('')}
         </div>
@@ -1180,7 +1275,7 @@ class GameUI {
               <p>积累热情增加攻击力，每出牌热情-1。倾注：清空热情×3一次爆发。爆发：消耗3热情+8伤害。</p>
             </div>
             <div class="help-section">
-              <b style="color:#4db8ff">💢 逻辑 · 破绽</b>
+              <b style="color:#4db8ff">💢 逻辑 · 弱点</b>
               <p>给BOSS积累弱点，每出牌触发弱点层伤害，回合末弱点减半。推演：额外弱点层伤害。清零：弱点×2爆发。</p>
             </div>
             <button class="btn-close-help" id="btnCloseHelp">关闭</button>
