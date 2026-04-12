@@ -530,17 +530,22 @@ class BattleEngine {
 
       // Swap
       if (fx.swap) {
-        const availRemain = this.deck.filter(c => !this.hand.includes(c));
-        const swapCount = Math.min(
-          fx.swap,
-          availRemain.length,
-          this.hand.filter(c => c.id !== card.id).length
-        );
-        if (swapCount > 0) {
-          this.pendingSwaps = Math.max(this.pendingSwaps, swapCount);
-          result.events.push(`${prefix}🔁 选择${swapCount}张牌替换`);
-        }
-      }
+  const canUseThisRound = this.s.cardsPlayedThisRound < MAX_CARDS;
+  if (!canUseThisRound) {
+    result.events.push(`${prefix}换牌失效：已是本回合最后一张`);
+  } else {
+    const availRemain = this.deck.filter(c => !this.hand.includes(c));
+    const swapCount = Math.min(
+      fx.swap,
+      availRemain.length,
+      this.hand.filter(c => c.id !== card.id).length
+    );
+    if (swapCount > 0) {
+      this.pendingSwaps = Math.max(this.pendingSwaps, swapCount);
+      result.events.push(`${prefix}🔁 选择${swapCount}张牌替换`);
+    }
+  }
+}
 
       // --- SPECIAL EFFECTS ---
       if (fx.special) {
