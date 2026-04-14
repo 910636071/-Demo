@@ -9,7 +9,21 @@ const G_NAME = { rock: '石头', scissors: '剪刀', paper: '布' };
 const G_ICON = { rock: '✊', scissors: '✌️', paper: '🖐️' };
 const G_COLOR = { rock: '#e67e22', scissors: '#e74c3c', paper: '#3498db' };
 const COUNTER = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
-const SELF_DMG = 6;
+
+// --- 猜拳词条类型 (per-gesture outcome modifiers) ---
+const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+const GESTURE_MOD_TYPES = {
+  neutral: [
+    { id: 'retaliate', label: 'BOSS反击', range: '1-3伤', getVal: () => rnd(1,3), desc: v => v+'伤' },
+    { id: 'bossHeal',  label: 'BOSS回复', range: '1-2血', getVal: () => rnd(1,2), desc: v => '+'+v+'血' },
+  ],
+  system: [
+    { id: 'bossPassion', label: 'BOSS获热情', range: '1-3', getVal: () => rnd(1,3), desc: v => '+'+v+'热情' },
+    { id: 'playerWeak',  label: '你受弱点',   range: '1-2', getVal: () => rnd(1,2), desc: v => '+'+v+'弱点' },
+    { id: 'lockGesture', label: '锁你手势',   range: '×1', getVal: () => 1,        desc: () => '锁×1' },
+  ]
+};
+const SELF_DMG = 4;
 const MAX_CARDS = 3;
 const HAND_SIZE = 5;
 const MAX_ROUNDS = 15;
@@ -229,8 +243,12 @@ const BOSSES = {
 // BATTLE ENGINE
 // ============================================================
 class BattleEngine {
-  constructor(systemKey, modCount, enableProtection, bossHp) {
+  constructor(systemKey, modCount, enableProtection, bossHp, opts) {
     this.systemKey = systemKey;
+    opts = opts || {};
+    this.bossModsEnabled = opts.bossModsEnabled !== false;
+    this.gestureModsEnabled = !!opts.gestureModsEnabled;
+    this.gestureModTier = opts.gestureModTier || 'basic';
     // Modifier pool from design document, with system-appropriate counter mods
     const ALL_MODS = [
       // 通用中立词条
@@ -310,6 +328,8 @@ class BattleEngine {
     this.log = [];
     this.roundLog = [];
     this.pendingSwaps = 0;
+    this.gestureModifiers = null;
+    this.fixedModTypes = null; // 2词条: fixed types for whole battle
   }
 
   // --- Draw hand ---
@@ -374,9 +394,64 @@ class BattleEngine {
 
     this.drawHand();
     this.currentBossGesture = this.rollBossGesture();
+    this.rollGestureModifiers();
     this.addLog(`=== 第${this.s.round}回合 ===`);
     this.addLog(`BOSS出: ${G_NAME[this.currentBossGesture]}${G_ICON[this.currentBossGesture]}`);
     return this.currentBossGesture;
+  }
+
+  // --- 猜拳词条生成 ---
+  rollGestureModifiers() {
+    if (!this.gestureModsEnabled) { this.gestureModifiers = null; return; }
+    const fullPool = [...GESTURE_MOD_TYPES.neutral, ...GESTURE_MOD_TYPES.system];
+    const mk = (t) => ({ ...t, revealed: false, value: null });
+    let slotPool;
+    if (this.gestureModTier === 'mixed') {
+      // 混合：每回合重新抽，3格各自独立
+      slotPool = fullPool;
+    } else {
+      // 2词条：整场战斗固定2种类型，每回合只重新分配（不换类型）
+      if (!this.fixedModTypes) {
+        const shuffled = [...fullPool].sort(() => Math.random() - 0.5);
+        this.fixedModTypes = [shuffled[0], shuffled[1]];
+      }
+      slotPool = this.fixedModTypes;
+    }
+    const pick = () => mk(slotPool[Math.floor(Math.random() * slotPool.length)]);
+    this.gestureModifiers = { win: pick(), draw: pick(), lose: pick() };
+  }
+
+  // --- 猜拳词条应用 ---
+  applyGestureMod(mod, result) {
+    if (!mod) return;
+    const v = mod.getVal(); // roll value NOW (at trigger time)
+    mod.value = v;
+    mod.revealed = true;
+    mod.text = mod.desc(v);
+    switch (mod.id) {
+      case 'retaliate':
+        this.s.playerHp -= v;
+        result.events.push('猜拳词条: BOSS反击' + v + '伤');
+        break;
+      case 'bossHeal':
+        this.s.bossHp = Math.min(this.s.bossMaxHp, this.s.bossHp + v);
+        result.events.push('猜拳词条: BOSS回复' + v);
+        break;
+      case 'bossPassion':
+        this.s.bossPassion += v;
+        result.events.push('猜拳词条: BOSS获' + v + '热情');
+        break;
+      case 'playerWeak':
+        this.s.playerWeakness += v;
+        result.events.push('猜拳词条: 你受' + v + '弱点');
+        break;
+      case 'lockGesture': {
+        const g = GESTURES[Math.floor(Math.random() * 3)];
+        this.s.playerLocks.add(g);
+        result.events.push('猜拳词条: 锁定你的' + G_NAME[g]);
+        break;
+      }
+    }
   }
 
   // --- RPS resolution ---
@@ -459,6 +534,10 @@ class BattleEngine {
     // 5. RPS result display
     const rpsText = isCounter ? '克制✓' : (rpsResult === 'draw' ? '平局' : '被克制✗');
     result.events.push(`${G_ICON[chosenGesture]}${G_NAME[chosenGesture]} vs ${G_ICON[bossG]}${G_NAME[bossG]} → ${rpsText}`);
+    if (this.gestureModifiers) {
+      const mk = isCounter ? 'win' : (rpsResult === 'draw' ? 'draw' : 'lose');
+      this.applyGestureMod(this.gestureModifiers[mk], result);
+    }
 
     // 6. Apply card effects
     const baseFx = card.fx || {};
@@ -686,13 +765,14 @@ class BattleEngine {
     if (!this.s.gameOver && this.s.cardsPlayedThisRound < MAX_CARDS && this.hand.length > 0 && this.pendingSwaps <= 0) {
       this.currentBossGesture = this.rollBossGesture();
       this.addLog(`BOSS\u4e0b\u4e00\u624b: ${G_NAME[this.currentBossGesture]}${G_ICON[this.currentBossGesture]}`);
+      this.rollGestureModifiers(); // re-assign to 3 slots for next card
     }
 
     return result;
   }
 
   applyBossPerCardMods(cardIndex, playerG, bossG, rpsResult, result) {
-    if (!this.s.bossPassiveActive) return;
+    if (!this.bossModsEnabled || !this.s.bossPassiveActive) return;
     const isWin = rpsResult === 'counter'; // player wins
     const isLose = rpsResult === 'lose';
 
@@ -885,7 +965,7 @@ case '第一张封锁':
     }
 
     // End-of-round boss mods
-    if (this.s.bossPassiveActive) {
+    if (this.bossModsEnabled && this.s.bossPassiveActive) {
       for (const mod of this.s.bossMods) {
         switch(mod) {
           case '回合结束伤害2':
@@ -997,6 +1077,9 @@ class GameUI {
     this.phase = 'title';
     this.selectedSystem = null;
     this.selectedBossHp = 100;
+    this.selectedBossMods = true;
+    this.selectedGestureMods = false;
+    this.selectedGestureModTier = 'basic';
   }
 
   init() {
@@ -1129,16 +1212,28 @@ class GameUI {
           <button class="hp-btn" data-hp="150">150\u8840<br><small>\u6781\u9650</small></button>
         </div>
         <div class="protect-toggle">
-          <label class="toggle-label">
-            <input type="checkbox" id="protectToggle"> 
-            <span>\u542f\u752850\u8840\u7ebf\u4fdd\u62a4 (\u6253\u4e0d\u8fc7\u53ef\u4ee5\u5f00)</span>
-          </label>
+          <label class="toggle-label"><input type="checkbox" id="protectToggle"><span>启用50血线保护</span></label>
+          <label class="toggle-label"><input type="checkbox" id="bossModsToggle" checked><span>BOSS被动词条（关=测试用）</span></label>
+          <label class="toggle-label"><input type="checkbox" id="gestureModsToggle"><span>猜拳结果词条（赢/平/负随机效果）</span></label>
+          <div id="gTierRow" style="display:none;margin-top:4px;padding-left:24px;">
+            <label class="toggle-label" style="display:inline-flex"><input type="radio" name="gTier" value="basic" checked><span>2词条（中立+体系,2格有效果）</span></label>
+            <label class="toggle-label" style="display:inline-flex;margin-left:10px"><input type="radio" name="gTier" value="mixed"><span>混合（全类型,3格全满）</span></label>
+          </div>
         </div>
         <button class="btn-back" id="btnBack">\u2190 \u8fd4\u56de\u9009\u62e9\u4f53\u7cfb</button>
       </div>`;
     document.querySelectorAll('.diff-btn').forEach(btn => {
-      btn.onclick = () => { const prot = document.getElementById('protectToggle').checked; this.startGame(this.selectedSystem, parseInt(btn.dataset.mods), prot); };
+      btn.onclick = () => {
+        const prot = document.getElementById('protectToggle').checked;
+        this.selectedBossMods = document.getElementById('bossModsToggle').checked;
+        this.selectedGestureMods = document.getElementById('gestureModsToggle').checked;
+        const tr = document.querySelector('input[name="gTier"]:checked');
+        this.selectedGestureModTier = tr ? tr.value : 'basic';
+        this.startGame(this.selectedSystem, parseInt(btn.dataset.mods), prot);
+      };
     });
+    const gToggle = document.getElementById('gestureModsToggle');
+    if (gToggle) gToggle.onchange = () => { document.getElementById('gTierRow').style.display = gToggle.checked ? 'block' : 'none'; };
     document.querySelectorAll('.hp-btn').forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll('.hp-btn').forEach(b => b.classList.remove('active'));
@@ -1153,7 +1248,7 @@ class GameUI {
   }
 
   startGame(systemKey, modCount, enableProtection) {
-    this.engine = new BattleEngine(systemKey, modCount, enableProtection, this.selectedBossHp);
+    this.engine = new BattleEngine(systemKey, modCount, enableProtection, this.selectedBossHp, {bossModsEnabled: this.selectedBossMods, gestureModsEnabled: this.selectedGestureMods, gestureModTier: this.selectedGestureModTier});
     this.phase = 'selecting';
     this.engine.startRound();
     // Show tutorial for first game
@@ -1214,6 +1309,15 @@ class GameUI {
               <span class="gesture-big">${G_ICON[bossG]}</span>
               <span>${G_NAME[bossG]}${bossGLocked?' \u{1f512}\u5df2\u9501':''}${!s.bossPassiveActive?' \u26a1\u88ab\u52a8\u5931\u6548':''}</span>
             </div>
+            ${this.engine.gestureModifiers ? (() => {
+              const gm = this.engine.gestureModifiers;
+              const fmt = (m) => m ? (m.revealed ? '<b>' + m.text + '</b>' : '<b>' + m.range + '</b>') : '';
+              return '<div class="gesture-mods">'
+                + '<div class="gmod gmod-win">赢→ ' + (gm.win ? gm.win.label + ' ' + fmt(gm.win) : '—') + '</div>'
+                + '<div class="gmod gmod-draw">平→ ' + (gm.draw ? gm.draw.label + ' ' + fmt(gm.draw) : '—') + '</div>'
+                + '<div class="gmod gmod-lose">负→ ' + (gm.lose ? gm.lose.label + ' ' + fmt(gm.lose) : '—') + '</div>'
+                + '</div>';
+            })() : ''}
             <div class="boss-resources">
               ${s.bossPassion>0?`<span class="res-tag passion">\u{1f525}\u70ed\u60c5 ${s.bossPassion}</span>`:''}
               ${s.bossWeakness>0?`<span class="res-tag weakness">\u{1f4a2}\u7834\u7efd ${s.bossWeakness}</span>`:''}
@@ -1334,6 +1438,7 @@ class GameUI {
             // Swap done, roll new boss gesture
             this.engine.currentBossGesture = this.engine.rollBossGesture();
             this.engine.addLog(`BOSS\u4e0b\u4e00\u624b: ${G_NAME[this.engine.currentBossGesture]}${G_ICON[this.engine.currentBossGesture]}`);
+            this.engine.rollGestureModifiers();
           }
           this.renderBattle();
         } else {
