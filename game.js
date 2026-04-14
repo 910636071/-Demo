@@ -81,7 +81,7 @@ const CARD_LIB = {
   c_tuixiao:   { name:'乘胜', system:'commercial', gestures:[SCISSORS,ROCK],
     desc:'4点伤害,每封住+2', cDesc:'效果触发两次', fx:{dmg:4,special:'tuixiao'}, cfx:{special:'tuixiao_re'} },
   c_qingsuan:  { name:'终局', system:'commercial', gestures:[PAPER,SCISSORS],
-    desc:'解封全部+每封住6伤', cDesc:'回复12生命', fx:{special:'qingsuan'}, cfx:{special:'qingsuan_c'} },
+    desc:'解封全部+每封住6伤', cDesc:'回复8生命', fx:{special:'qingsuan'}, cfx:{special:'qingsuan_c'} },
  c_zhihuan: {
   name:'重组', system:'commercial', gestures:[ROCK,PAPER],
   desc:'6点伤害+换1张牌',
@@ -121,9 +121,9 @@ e_fusu: {
 },
  e_yayi: {
   name:'积压', system:'empathy', gestures:[ROCK,PAPER],
-  desc:'自伤3+积累5热情',
+  desc:'自伤3+积累4热情',
   cDesc:'造成4点伤害',
-  fx:{selfDmg:3,passion:5},
+  fx:{selfDmg:3,passion:4},
   cfx:{dmg:4}
 },
 e_tupo: {
@@ -654,7 +654,7 @@ class BattleEngine {
             break;
           }
           case 'qingsuan_c': {
-            heal += 12;
+            heal += 8;
             result.events.push(`${prefix}清算克制: 回复12`);
             break;
           }
@@ -1076,7 +1076,7 @@ class GameUI {
     this.engine = null;
     this.phase = 'title';
     this.selectedSystem = null;
-    this.selectedBossHp = 100;
+    this.selectedBossHp = 80; // match the default active HP button
     this.selectedBossMods = true;
     this.selectedGestureMods = false;
     this.selectedGestureModTier = 'basic';
